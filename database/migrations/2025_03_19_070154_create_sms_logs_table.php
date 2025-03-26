@@ -12,12 +12,16 @@ return new class extends Migration {
     {
         Schema::create('sms_logs', function (Blueprint $table) {
             $table->id();
-            $table->string('purpose');
-            $table->json('student_ids');
-            $table->text('message');
-            $table->enum('status', ['success', 'failed']);
-            $table->text('gateway_response');
+            $table->unsignedBigInteger('sms_id');
+            $table->unsignedBigInteger('user_id');
+            $table->string('phone_number');
+            $table->enum('status', ['pending', 'success', 'failed'])->default('pending');
+            $table->json('gateway_response')->nullable();
             $table->timestamps();
+
+            // Foreign key constraints
+            $table->foreign('sms_id')->references('id')->on('sms')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
         });
     }
 

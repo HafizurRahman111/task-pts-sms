@@ -6,7 +6,6 @@ use App\Models\Sms;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Str;
 use Faker\Factory as Faker;
 
 class SmsSeeder extends Seeder
@@ -16,28 +15,58 @@ class SmsSeeder extends Seeder
      */
     public function run(): void
     {
-        $numberOfUsers = rand(1, 2);
-        $userReferences = [];
+        // Sms::truncate();
 
-        for ($i = 1; $i <= $numberOfUsers; $i++) {
-            $userReferences[] = User::inRandomOrder()->first()->id;
+        // Fetch all student IDs
+        $studentIds = User::where('role', 'student')->pluck('id')->toArray();
+
+        // Check if there are any students
+        if (empty($studentIds)) {
+            $this->command->warn('No students found in the users table!');
+            return;
         }
 
-        // Create a Faker instance
+        // Shuffle the student IDs randomly
+        shuffle($studentIds);
+
+        // Get 5 random student IDs, or fewer if there are not enough students
+        $randomStudentIds = array_slice($studentIds, 0, 5);
+
+        // Initialize Faker
         $faker = Faker::create();
 
-        // Create 4 sms for the retrieved user
-        for ($i = 0; $i < 3; $i++) {
-            $gatewayResponse = "test";
+        // SMS records to be created
+        $smsRecords = [
+            [
+                'subject' => 'Reminder',
+                'message' => 'Assignment due tomorrow.',
+                'user_ids' => $randomStudentIds,
+            ],
+            [
+                'subject' => 'Notification',
+                'message' => 'Class canceled due to weather.',
+                'user_ids' => $randomStudentIds,
+            ],
+            [
+                'subject' => 'Alert',
+                'message' => 'Library books due soon.',
+                'user_ids' => $randomStudentIds,
+            ],
+            [
+                'subject' => 'Promotion',
+                'message' => 'New course available! Enroll now.',
+                'user_ids' => $randomStudentIds,
+            ]
+        ];
 
+        foreach ($smsRecords as $smsRecord) {
             Sms::create([
-                'purpose' => $faker->word,
-                'student_ids' => $userReferences,
-                'message' => $faker->sentence(3, true),
-                'status' => $faker->randomElement(['success', 'failed']),
-                'gateway_response' => $gatewayResponse,
-                'created_at' => $faker->dateTimeBetween('now', '2025-12-31'),
+                'subject' => $smsRecord['subject'],
+                'message' => $smsRecord['message'],
+                'user_ids' => json_encode($smsRecord['user_ids']),
             ]);
         }
+
+        $this->command->info('SMS table seeded successfully!');
     }
 }

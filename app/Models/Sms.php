@@ -10,26 +10,14 @@ class Sms extends Model
 {
     use HasFactory;
 
-    protected $table = 'sms_logs';
+    protected $fillable = ['subject', 'message', 'user_ids', 'status',];
 
-    protected $fillable = [
-        'purpose',
-        'student_ids',
-        'message',
-        'status',
-        'gateway_response'
+    protected $casts = [
+        'user_ids' => 'array',
     ];
 
-    protected function casts(): array
+    public function logs()
     {
-        return [
-            'student_ids' => 'array',
-        ];
-    }
-
-    // Define relationship with User model
-    public function user()
-    {
-        return $this->belongsTo(User::class);
+        return $this->hasMany(SmsLog::class);
     }
 }

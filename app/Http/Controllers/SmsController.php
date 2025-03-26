@@ -1,141 +1,168 @@
 <?php
-
 namespace App\Http\Controllers;
 
+use App\Interfaces\SmsGatewayInterface;
+use App\Jobs\SendSmsJob;
 use App\Models\Sms;
+use App\Models\SmsLog;
 use App\Models\User;
-use App\Services\MockSmsGatewayService;
-use Illuminate\Support\Str;
-use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
 
 class SmsController extends Controller
 {
-    protected $smsService;
+    protected $smsGateway;
 
-    public function __construct(MockSmsGatewayService $smsService)
+    public function __construct(SmsGatewayInterface $smsGateway)
     {
-        $this->smsService = $smsService;
-    }
-
-    public function sendSms(Request $request)
-    {
-        try {
-            $validatedData = $request->validate([
-                'message' => 'required|string',
-                'purpose' => 'required|string|max:255',
-                'student_ids' => 'required|array',
-            ]);
-
-            $phoneNumbers = $this->getPhoneNumbersFromStudentIds($validatedData['student_ids']);
-
-            if (empty($phoneNumbers)) {
-                return response()->json(['error' => 'No phone numbers found for the provided student IDs.'], 404);
-            }
-
-            $gatewayResponse = $this->smsService->sendSms(
-                $phoneNumbers,
-                $validatedData['message'],
-                $validatedData['purpose'],
-                $validatedData['student_ids'],
-            );
-
-            return response()->json(['data' => $gatewayResponse, 'message' => 'SMS sent successfully!'], 201);
-
-        } catch (ValidationException $e) {
-            return response()->json(['errors' => $e->errors()], 422);
-        } catch (\Exception $e) {
-            Log::error('Error sending SMS: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to send SMS'], 500);
-        }
-    }
-
-    protected function getPhoneNumbersFromStudentIds(array $studentIds): array
-    {
-        return User::whereIn('id', $studentIds)->pluck('phone')->toArray();
+        $this->smsGateway = $smsGateway;
     }
 
     /**
-     * Display a listing of the resource.
+     * Send SMS to users.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function sendSms(Request $request)
+    {
+        // Validate request data
+        $validator = Validator::make($request->all(), [
+            'subject' => 'required|string|max:255',
+            'message' => 'required|string|max:160',
+            'user_ids' => 'required|array|min:1',
+            'user_ids.*' => 'integer|exists:users,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Create the SMS record
+        $sms = Sms::create([
+            'subject' => $request->subject,
+            'message' => $request->message,
+            'user_ids' => json_encode($request->user_ids), // Store user_ids as JSON
+        ]);
+
+        // Fetch phone numbers for the given user IDs
+        $phoneNumbers = $this->getPhoneNumbersFromUserIds($request->user_ids);
+
+        if (empty($phoneNumbers)) {
+            return response()->json(['error' => 'No valid phone numbers found for the provided user IDs.'], 404);
+        }
+
+        // Dispatch a job to send SMS asynchronously
+        SendSmsJob::dispatch($sms, $phoneNumbers);
+
+        return response()->json([
+            'message' => 'SMS sending process has been queued.',
+            'data' => $sms,
+        ], 202);
+    }
+
+    /**
+     * Fetch phone numbers for the given user IDs.
+     *
+     * @param array $userIds
+     * @return array
+     */
+    protected function getPhoneNumbersFromUserIds(array $userIds): array
+    {
+        return User::whereIn('id', $userIds)
+            ->pluck('phone')
+            ->filter()
+            ->toArray();
+    }
+
+    /**
+     * Get SMS logs for a specific SMS.
+     *
+     * @param int $smsId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getSmsLogs($smsId)
+    {
+        $logs = SmsLog::where('sms_id', $smsId)->get();
+
+        return response()->json(['data' => $logs], 200);
+    }
+
+    /**
+     * Display a listing of all SMS records.
+     *
+     * @return \Illuminate\Http\JsonResponse
      */
     public function index()
     {
         try {
-            $messages = Sms::all();
+            // Eager load the associated SmsLog records for all SMS messages
+            $messages = Sms::with('logs')->get();
+
             return response()->json(['data' => $messages], 200);
         } catch (\Exception $e) {
-            Log::error('Error fetching messages: ' . $e->getMessage());
-            return response()->json(['error' => 'Failed to fetch messages'], 500);
+            Log::error('Error fetching SMS records: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to fetch SMS records.'], 500);
         }
     }
 
     /**
-     * Show the form for creating a new resource.
-     */
-    public function create()
-    {
-        //
-    }
-
-    /**
-     * Store a newly created resource in storage.
-     */
-    public function store(Request $request)
-    {
-
-    }
-
-    /**
-     * Display the specified resource.
+     * Display the specified SMS record.
+     *
+     * @param Sms $sms
+     * @return \Illuminate\Http\JsonResponse
      */
     public function show(Sms $sms)
     {
         try {
-            if (!$sms) {
-                return response()->json([
-                    'success' => false,
-                    'error' => 'Sms not found.'
-                ], 404);
-            }
+            // Eager load the associated SmsLog records
+            $sms->load('logs');
 
             return response()->json([
                 'success' => true,
-                'data' => $sms
+                'data' => [
+                    'sms' => $sms,
+                ],
             ], 200);
         } catch (\Exception $e) {
-            Log::error('Error fetching sms: ' . $e->getMessage());
-
+            Log::error('Error fetching SMS record: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to fetch sms. Please try again later.'
+                'error' => 'Failed to fetch SMS record. Please try again later.'
             ], 500);
         }
     }
 
     /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(Sms $sms)
-    {
-        //
-    }
-
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, Sms $sms)
-    {
-
-
-    }
-
-    /**
-     * Remove the specified resource from storage.
+     * Delete the specified SMS record.
+     *
+     * @param Sms $sms
+     * @return \Illuminate\Http\JsonResponse
      */
     public function destroy(Sms $sms)
     {
-
+        try {
+            $sms->delete();
+            return response()->json([
+                'success' => true,
+                'message' => 'SMS record deleted successfully.'
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error deleting SMS record: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to delete SMS record. Please try again later.'
+            ], 500);
+        }
     }
+
+
+    public function showSmsForm(Request $request)
+    {
+        $users = User::select('id', 'name')->get();
+
+        return view('sms.send_sms', compact('users'));
+    }
+
 }

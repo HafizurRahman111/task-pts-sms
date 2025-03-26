@@ -49,4 +49,9 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function smsLogs()
+    {
+        return $this->hasMany(SmsLog::class);
+    }
 }

@@ -9,10 +9,18 @@ use Illuminate\Support\Facades\Route;
 // user routes
 Route::get('/users', [UserController::class, 'index']);
 
-// sms routes
-Route::post('/send-sms', [SmsController::class, 'sendSms']);
+Route::get('/sms-logs/{smsId}', [SmsController::class, 'getSmsLogs']);
+    
 
+// SMS Routes
 Route::prefix('sms')->group(function () {
+    // Send SMS
+    Route::post('/send', [SmsController::class, 'sendSms']);
+   
+    // List all SMS records
     Route::get('/', [SmsController::class, 'index']);
+    // Show a specific SMS record
     Route::get('/{sms}', [SmsController::class, 'show']);
+    // Delete a specific SMS record
+    Route::delete('/{sms}', [SmsController::class, 'destroy']);
 });

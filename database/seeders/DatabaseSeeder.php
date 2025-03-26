@@ -34,16 +34,16 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Regular User-1',
                 'email' => 'user@example.com',
-                'phone' => '127456789',
+                'phone' => '+8801680735420',
                 'password' => Hash::make('pass1234'),
                 'role' => 'student',
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
             [
-                'name' => 'Regular User-2',
+                'name' => 'Saib Sizan',
                 'email' => 'user2@example.com',
-                'phone' => '127458789',
+                'phone' => '+8801521213420',
                 'password' => Hash::make('pass1234'),
                 'role' => 'student',
                 'created_at' => now(),
@@ -52,7 +52,8 @@ class DatabaseSeeder extends Seeder
         ]);
 
         $this->call([
-            SmsSeeder::class,
+            // SmsSeeder::class,
+            // SmsLogSeeder::class,
         ]);
 
     }

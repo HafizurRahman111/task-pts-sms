@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Interfaces\SmsGatewayInterface;
+use App\Services\MockSmsGatewayService;
+use App\Services\TwilioSmsGatewayService;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -11,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->bind(SmsGatewayInterface::class, TwilioSmsGatewayService::class);
     }
 
     /**
